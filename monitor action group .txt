@@ -1,0 +1,179 @@
+monitor action group 
+
+main
+
+/*
+    Azure Monitor Action Group
+      
+    Loads
+      - Resource Group          - Default Resource Group for Resources
+
+    Resources
+      - Monitor Action Group
+
+    Output
+      - azurerm_monitor_action_group.this
+    
+    Naming Standards (https://docs.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming)
+      - Monitor Action Group  - <name>    
+*/
+
+// - Resources
+
+# - Action Group
+resource "azurerm_monitor_action_group" "this" {
+  for_each            = var.action_groups
+  name                = each.value.name
+  resource_group_name = lookup(each.value, "resource_group_name", null) == null ? var.resource_group.name : each.value.resource_group_name
+  location            = lookup(each.value, "location", null) == null ? var.resource_group.location : each.value.location
+  short_name          = each.value.short_name #(Required) The short name of the action group. This will be used in SMS messages.
+
+  enabled = lookup(each.value, "enabled", null) #(Optional) Whether this action group is enabled. If an action group is not enabled, then none of its receivers will receive communications. Defaults to true.
+  tags    = merge(var.resource_group.tags, lookup(each.value, "tags", null))
+
+  dynamic "arm_role_receiver" { #(Optional) One or more arm_role_receiver blocks as defined below.
+    for_each = lookup(each.value, "arm_role_receiver", [])
+    content {
+      name                    = arm_role_receiver.value.name                                     #(Required) The name of the ARM role receiver.
+      role_id                 = lookup(arm_role_receiver.value, "role_id", null)                 #(Required) The arm role id.
+      use_common_alert_schema = lookup(arm_role_receiver.value, "use_common_alert_schema", null) #(Optional) Enables or disables the common alert schema.
+    }
+  }
+
+  dynamic "automation_runbook_receiver" { #(Optional) One or more automation_runbook_receiver blocks as defined below.
+    for_each = lookup(each.value, "automation_runbook_receiver", [])
+    content {
+      name                    = automation_runbook_receiver.value.name                                     #(Required) The name of the automation runbook receiver.
+      automation_account_id   = automation_runbook_receiver.value.automation_account_id                    #(Required) The automation account ID which holds this runbook and authenticates to Azure resources.
+      runbook_name            = automation_runbook_receiver.value.runbook_name                             #(Required) The name for this runbook.
+      webhook_resource_id     = automation_runbook_receiver.value.webhook_resource_id                      #(Required) The resource id for webhook linked to this runbook.
+      is_global_runbook       = automation_runbook_receiver.value.is_global_runbook                        #(Required) Indicates whether this instance is global runbook.
+      service_uri             = automation_runbook_receiver.value.service_uri                              #(Required) The URI where webhooks should be sent.
+      use_common_alert_schema = lookup(automation_runbook_receiver.value, "use_common_alert_schema", null) #(Optional) Enables or disables the common alert schema.
+    }
+  }
+
+  dynamic "azure_app_push_receiver" { #(Optional) One or more azure_app_push_receiver blocks as defined below.
+    for_each = lookup(each.value, "azure_app_push_receiver", [])
+    content {
+      name          = azure_app_push_receiver.value.name          #(Required) The name of the Azure app push receiver.
+      email_address = azure_app_push_receiver.value.email_address #(Required) The email address of the user signed into the mobile app who will receive push notifications from this receiver.
+    }
+  }
+
+  dynamic "azure_function_receiver" { #(Optional) One or more azure_function_receiver blocks as defined below.
+    for_each = lookup(each.value, "azure_function_receiver", [])
+    content {
+      name                     = azure_function_receiver.value.name                                     #(Required) The name of the Azure Function receiver.
+      function_app_resource_id = azure_function_receiver.value.function_app_resource_id                 #(Required) The Azure resource ID of the function app.
+      function_name            = azure_function_receiver.value.function_name                            #(Required) The function name in the function app.
+      http_trigger_url         = azure_function_receiver.value.http_trigger_url                         #(Required) The http trigger url where http request sent to.
+      use_common_alert_schema  = lookup(azure_function_receiver.value, "use_common_alert_schema", null) #(Optional) Enables or disables the common alert schema.
+    }
+  }
+
+  dynamic "email_receiver" { #(Optional) One or more email_receiver blocks as defined below.
+    for_each = lookup(each.value, "email_receiver", [])
+    content {
+      name                    = email_receiver.value.name                                     #(Required) The name of the email receiver. Names must be unique (case-insensitive) across all receivers within an action group.
+      email_address           = email_receiver.value.email_address                            #(Required) The email address of this receiver.
+      use_common_alert_schema = lookup(email_receiver.value, "use_common_alert_schema", null) #(Optional) Enables or disables the common alert schema.
+    }
+  }
+
+  dynamic "event_hub_receiver" { #(Optional) One or more event_hub_receiver blocks as defined below.
+    for_each = lookup(each.value, "event_hub_receiver", [])
+    content {
+      name            = event_hub_receiver.value.name            #(Required) The name of the EventHub Receiver, must be unique within action group.
+      event_hub_name  = event_hub_receiver.value.event_hub_name  #(Required) The name of the specific Event Hub queue.
+      subscription_id = event_hub_receiver.value.subscription_id #(Required) The ID for the subscription containing this Event Hub. Default to the subscription ID of the Action Group.
+
+      event_hub_namespace     = lookup(event_hub_receiver.value, "event_hub_namespace", null)     #(Optional) The namespace name of the Event Hub.
+      tenant_id               = lookup(event_hub_receiver.value, "tenant_id", null)               #(Optional) The Tenant ID for the subscription containing this Event Hub.
+      use_common_alert_schema = lookup(event_hub_receiver.value, "use_common_alert_schema", null) #(Optional) Indicates whether to use common alert schema.      
+    }
+  }
+
+  dynamic "itsm_receiver" { #(Optional) One or more itsm_receiver blocks as defined below.
+    for_each = lookup(each.value, "itsm_receiver", [])
+    content {
+      name                 = itsm_receiver.value.name                 #(Required) The name of the ITSM receiver.
+      workspace_id         = itsm_receiver.value.workspace_id         #(Required) The Azure Log Analytics workspace ID where this connection is defined.
+      connection_id        = itsm_receiver.value.connection_id        #(Required) The unique connection identifier of the ITSM connection.
+      ticket_configuration = itsm_receiver.value.ticket_configuration #(Required) A JSON blob for the configurations of the ITSM action. CreateMultipleWorkItems option will be part of this blob as well.
+      region               = itsm_receiver.value.region               #(Required) The region of the workspace.
+    }
+  }
+
+  dynamic "logic_app_receiver" { #(Optional) One or more logic_app_receiver blocks as defined below.
+    for_each = lookup(each.value, "logic_app_receiver", [])
+    content {
+      name                    = logic_app_receiver.value.name                                     #(Required) The name of the logic app receiver.
+      resource_id             = logic_app_receiver.value.resource_id                              #(Required) The Azure resource ID of the logic app.
+      callback_url            = logic_app_receiver.value.callback_url                             #(Required) The callback url where http request sent to.
+      use_common_alert_schema = lookup(logic_app_receiver.value, "use_common_alert_schema", null) #(Optional) Enables or disables the common alert schema.
+    }
+  }
+
+  dynamic "sms_receiver" { #(Optional) One or more sms_receiver blocks as defined below.
+    for_each = lookup(each.value, "sms_receiver", [])
+    content {
+      name         = sms_receiver.value.name         #(Required) The name of the SMS receiver. Names must be unique (case-insensitive) across all receivers within an action group.
+      country_code = sms_receiver.value.country_code #(Required) The country code of the SMS receiver.
+      phone_number = sms_receiver.value.phone_number #(Required) The phone number of the SMS receiver.
+    }
+  }
+
+  dynamic "voice_receiver" { #(Optional) One or more voice_receiver blocks as defined below.
+    for_each = lookup(each.value, "voice_receiver", [])
+    content {
+      name         = voice_receiver.value.name         #(Required) The name of the voice receiver.
+      country_code = voice_receiver.value.country_code #(Required) The country code of the voice receiver.
+      phone_number = voice_receiver.value.phone_number #(Required) The phone number of the voice receiver.
+    }
+  }
+
+  dynamic "webhook_receiver" { #(Optional) One or more webhook_receiver blocks as defined below.
+    for_each = lookup(each.value, "webhook_receiver", [])
+    content {
+      name                    = webhook_receiver.value.name                                     #(Required) The name of the webhook receiver. Names must be unique (case-insensitive) across all receivers within an action group.
+      service_uri             = webhook_receiver.value.service_uri                              #(Required) The URI where webhooks should be sent.
+      use_common_alert_schema = lookup(webhook_receiver.value, "use_common_alert_schema", null) #(Optional) Enables or disables the common alert schema.
+
+      dynamic "aad_auth" {
+        for_each = lookup(webhook_receiver.value, "aad_auth", null)
+        content {
+          object_id      = aad_auth.value.object_id                 #(Required) The webhook application object Id for aad auth.
+          identifier_uri = lookup(aad_auth, "identifier_uri", null) #(Optional) The identifier uri for aad auth.
+          tenant_id      = lookup(aad_auth, "tenant_id", null)      #(Optional) The tenant id for aad auth.          
+        }
+      }
+    }
+  }
+}
+
+
+variable
+
+# - Core object
+
+# - Load Existing Resources
+variable "resource_group" {
+  description = "Existing Resource Group. Assign object map from a 'resource' block, 'module' optput block or 'data' block'"
+  type        = any
+}
+
+# - Main Resources
+variable "action_groups" {
+  description = "The Monitor Action Groups with their properties."
+  type        = any
+}
+
+
+output
+
+# - Monitor Action Groups
+output "action_groups" {
+  description = "Map output of the Monitor Action Groups"
+  value       = { for k, b in azurerm_monitor_action_group.this : k => b }
+}

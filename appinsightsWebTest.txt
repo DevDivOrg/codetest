@@ -1,0 +1,75 @@
+appinsightsWebTest
+
+main
+
+/*
+  Azure App insights Web Test Module
+    
+  Resources
+    - App Insights Web Test
+
+  Output
+    - azurerm_application_insights_web_test.this
+
+  Naming Standards (https://docs.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming)
+*/
+
+// - Main Resources
+
+# - App Insights Web Test
+resource "azurerm_application_insights_web_test" "this" {
+  for_each                = var.web_tests
+  name                    = lookup(each.value, "override_name", false) == false ? "ai-at-${each.value.name}-${var.environment}-${lookup(each.value, "location", null) == null ? var.resource_group.location : each.value.location}-${each.value.instance}" : each.value.name
+  resource_group_name     = var.resource_group.name
+  location                = lookup(each.value, "location", null) == null ? var.resource_group.location : each.value.location
+  application_insights_id = lookup(var.app_insights, each.value.app_insights_key).id #(Required) The ID of the Application Insights component on which the WebTest operates. Changing this forces a new resource to be created.
+  kind                    = each.value.kind                                          #(Required) The kind of web test that this web test watches. Choices are ping and multistep. Changing this forces a new resource to be created.
+  geo_locations           = each.value.geo_locations                                 #(Required) A list of where to physically run the tests from to give global coverage for accessibility of your application.
+  configuration           = each.value.configuration                                 #(Required) An XML configuration specification for a WebTest (see here for more information).
+
+  frequency     = lookup(each.value, "frequency", 300)      #(Optional) Interval in seconds between test runs for this WebTest. Valid options are 300, 600 and 900. Defaults to 300.
+  timeout       = lookup(each.value, "timeout", 30)         #(Optional) Seconds until this WebTest will timeout and fail. Default is 30.
+  enabled       = lookup(each.value, "enabled", null)       #(Optional) Is the test actively being monitored.
+  retry_enabled = lookup(each.value, "retry_enabled", null) #(Optional) Allow for retries should this WebTest fail.
+  description   = lookup(each.value, "description", null)   #(Optional) Purpose/user defined descriptive test for this WebTest.
+
+  tags = merge(var.resource_group.tags, lookup(each.value, "tags", null))
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
+}
+
+
+variable
+
+# - Core object
+variable "environment" {
+  description = "Current environment"
+  type        = string
+}
+
+# - Main resources
+variable "resource_group" {
+  description = "The Log Analytics Workspace resources group. Assign object map from a 'resource' block or 'module' optput"
+  type        = any
+}
+
+variable "web_tests" {
+  description = "The Web Test with their properties."
+  type        = any
+}
+
+variable "app_insights" {
+  description = "The App Insights with their properties."
+  type        = any
+}
+
+output
+
+# - App Insights Web Tests
+
+output "web_tests" {
+  description = "Map output of the Application Insights Web Tests"
+  value       = { for k, b in azurerm_application_insights_web_test.this : k => b }
+}

@@ -1,0 +1,67 @@
+smart detector alert
+
+main
+
+/*
+    Monitor Smart Detector Alerts
+      
+    Loads
+      - Resource Group          - Default Resource Group for Resources
+      - Action Group            - Existing Action Group
+
+    Resources
+      - Monitor Smart Detector Alert
+    
+    Naming Standards (https://docs.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming)
+      - Monitor Smart Detector Alert    - <name>
+*/
+// - Data gathering
+
+// - Main Resources
+resource "azurerm_monitor_smart_detector_alert_rule" "this" {
+  for_each            = var.monitor_smart_detector_alerts
+  name                = each.value.name
+  resource_group_name = lookup(each.value, "resource_group_name", null) == null ? var.resource_group.name : each.value.resource_group_name
+  tags                = merge(var.resource_group.tags, lookup(each.value, "tags", {}))
+
+  detector_type      = each.value.detector_type      #(Required) Specifies the Built-In Smart Detector type that this alert rule will use. Currently the only possible values are FailureAnomaliesDetector, RequestPerformanceDegradationDetector, DependencyPerformanceDegradationDetector, ExceptionVolumeChangedDetector, TraceSeverityDetector, MemoryLeakDetector.
+  scope_resource_ids = each.value.scope_resource_ids #(Required) Specifies the scopes of this Smart Detector Alert Rule.
+  severity           = each.value.severity           #(Required) Specifies the severity of this Smart Detector Alert Rule. Possible values are Sev0, Sev1, Sev2, Sev3 or Sev4.
+  frequency          = each.value.frequency          #(Required) Specifies the frequency of this Smart Detector Alert Rule in ISO8601 format.
+
+  description         = lookup(each.value, "description", null)         #(Optional) Specifies a description for the Smart Detector Alert Rule.
+  enabled             = lookup(each.value, "enabled", null)             #(Optional) Is the Smart Detector Alert Rule enabled? Defaults to true.
+  throttling_duration = lookup(each.value, "throttling_duration", null) #(Optional) Specifies the duration (in ISO8601 format) to wait before notifying on the alert rule again.
+
+  dynamic "action_group" { #(Required) An action_group block as defined below.
+    for_each = lookup(each.value, "action_group", [])
+    content {
+      ids = [for group in lookup(action_group.value, "action_group_keys", []) : lookup(var.action_groups, group).id] #(Required) Specifies the action group ids.
+
+      email_subject   = lookup(action_group.value, "email_subject", null)   #(Optional) Specifies a custom email subject if Email Receiver is specified in Monitor Action Group resource.
+      webhook_payload = lookup(action_group.value, "webhook_payload", null) #(Optional) A JSON String which Specifies the custom webhook payload if Webhook Receiver is specified in Monitor Action Group resource.      
+    }
+  }
+}
+
+
+variables
+
+# - Core object
+
+# - Load Existing Resources
+variable "resource_group" {
+  description = "Existing resource group. Assign object map from a 'resource' block or 'module' optput"
+  type        = any
+}
+
+variable "action_groups" {
+  description = "Existing monitor action groups. Assign object map from a 'resource' block or 'module' optput"
+  type        = any
+}
+
+# - Main Resources
+variable "monitor_smart_detector_alerts" {
+  description = "The Monitor Smart Detector Alerts for resources with their properties."
+  type        = any
+}
